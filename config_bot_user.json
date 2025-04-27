@@ -1,0 +1,23 @@
+{
+  "bots": [
+    {
+      "username": "@bot1_username",
+      "token": "xxxxxxxx"
+    },
+    {
+      "username": "@bot2_username",
+      "token": "xxxxxxxx"
+    }
+  ],
+  "users": [
+    {
+      "username": "user1_username",
+      "id": "xxxxxx"
+    },
+    {
+      "username": "user2_username",
+      "id": "xxxxxx"
+    }
+  ]
+}
+
