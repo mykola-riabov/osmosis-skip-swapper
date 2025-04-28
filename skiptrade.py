@@ -30,29 +30,28 @@ ACCOUNT_PASSWORD = config["account_password"]
 ACCOUNT_ADDRESS = config["account_address"]
 DEFAULT_SLIPPAGE_PERCENT = config.get("slippage_percent", 1.5)
 
-# Telegram parameters from config_skiptrade.json
 BOT_USERNAME = config["telegram_bot_username"]
 USERNAMES = config["telegram_usernames"]
 
-# Find bot token and user IDs
+# Functions to load bot token and user IDs
 def get_bot_token(bot_list, bot_username):
     for bot in bot_list:
         if bot["username"] == bot_username:
             return bot["token"]
-    raise ValueError(f"Bot {bot_username} not found in config_bot_user.json")
+    raise ValueError(f"Bot {bot_username} not found")
 
 def get_user_id(user_list, username):
     for user in user_list:
         if user["username"] == username:
             return user["id"]
-    raise ValueError(f"User {username} not found in config_bot_user.json")
+    raise ValueError(f"User {username} not found")
 
 BOT_TOKEN = get_bot_token(bot_config["bots"], BOT_USERNAME)
 RECIPIENTS = [get_user_id(bot_config["users"], username) for username in USERNAMES]
 
 SKIP_API_URL = "https://api.skip.build/v2/fungible/route"
 
-# Check log file size
+# Logging setup
 MAX_LOG_SIZE = 10 * 1024 * 1024
 if LOG_FILE_PATH.exists() and LOG_FILE_PATH.stat().st_size > MAX_LOG_SIZE:
     LOG_FILE_PATH.unlink()
@@ -62,7 +61,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
-
+# Telegram message sender
 def send_telegram_message(message):
     for chat_id in RECIPIENTS:
         try:
@@ -76,6 +75,7 @@ def send_telegram_message(message):
         except Exception as e:
             logging.error(f"Failed to send Telegram message: {e}")
 
+# Token mapping loader
 def load_token_mapping():
     with open(ASSETS_PATH, "r") as f:
         data = json.load(f)
@@ -101,12 +101,15 @@ def load_token_mapping():
 
     return token_to_denom, denom_to_token, denom_to_divisor
 
+# Convert display units to base units
 def to_base_units(amount_display, divisor):
     return str(int(amount_display * divisor))
 
+# Convert base units to display units
 def to_display_units(amount_base, divisor):
     return float(amount_base) / divisor
 
+# Request route from Skip API
 def get_skip_route(data):
     try:
         response = requests.post(SKIP_API_URL, headers={"Content-Type": "application/json"}, json=data)
@@ -118,32 +121,40 @@ def get_skip_route(data):
         print(f"❌ Skip API error: {e}")
         logging.error(f"Skip API error: {e}")
         return None
+# Execute osmosisd command
+def execute_command(command, password, dry_run_mode):
+    if dry_run_mode:
+        print(f"\n📋 Osmosisd command:\n{command}\n")
+        with open(CMD_TEXT_PATH, "w") as f:
+            f.write(command + "\n")
+        logging.info("Dry-run mode: command saved and printed.")
+        return None, None
 
-def execute_command(command, password):
+    print(f"\n📋 Executing osmosisd command:\n{command}\n")
+    with open(CMD_TEXT_PATH, "w") as f:
+        f.write(command + "\n")
+
     try:
         result = subprocess.run(command, input=password + "\n", capture_output=True, text=True, shell=True)
         if result.returncode != 0:
             print(f"❌ Command failed:\n{result.stderr}")
             logging.error(f"Command execution failed: {result.stderr.strip()}")
             return None, None
-        else:
-            print(f"✅ Command success:\n{result.stdout}")
-            logging.info(f"Command executed successfully.")
 
-            txhash_match = re.search(r"txhash:\s*([A-F0-9]+)", result.stdout)
-            if txhash_match:
-                txhash = txhash_match.group(1)
-                print(f"🔗 Transaction Hash: {txhash}")
-                logging.info(f"Transaction Hash: {txhash}")
-                return txhash, result.stdout
-            else:
-                logging.warning("Transaction hash not found in output.")
-                return None, result.stdout
+        txhash_match = re.search(r"txhash:\s*([A-F0-9]+)", result.stdout)
+        if txhash_match:
+            txhash = txhash_match.group(1)
+            print(f"🔗 Transaction Hash: {txhash}")
+            logging.info(f"Transaction Hash: {txhash}")
+            return txhash, result.stdout
+        else:
+            logging.warning("Transaction hash not found in output.")
+            return None, result.stdout
+
     except Exception as e:
         print(f"❌ Execution error: {e}")
         logging.error(f"Execution error: {e}")
         return None, None
-
 def main():
     parser = argparse.ArgumentParser(description="Skip Protocol swap executor for Osmosis")
     parser.add_argument("--from", dest="token_from", required=True)
@@ -238,18 +249,9 @@ def main():
             f"--fees {fees}{GAS_TOKEN} -y"
         )
 
-        if args.dry_run:
-            command += " --dry-run"
-
-        with open(CMD_TEXT_PATH, "w") as f:
-            f.write(command + "\n")
-
-        print(f"\n💾 Saved osmosisd command to: {CMD_TEXT_PATH}")
-        print(f"\n📋 Executing command:\n{command}\n")
-
-        logging.info(f"Executing swap: {token_from}->{token_to}, Amount In: {amount_display}")
-
-        txhash, _ = execute_command(command, ACCOUNT_PASSWORD)
+        print(f"\n📊 Pools in route: {' -> '.join(pool_ids)}")
+        
+        txhash, _ = execute_command(command, ACCOUNT_PASSWORD, args.dry_run)
 
         if txhash:
             msg = (
@@ -268,4 +270,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
