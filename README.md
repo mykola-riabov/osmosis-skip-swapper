@@ -5,7 +5,7 @@ This project is a bot for automating token swaps on the Osmosis DEX via the Skip
 
 ## What the script does
 
-- Finds the optimal swap route for tokens via the [Skip Protocol API](https://skip.money/).
+- Finds the optimal swap route for tokens via the [Skip Protocol API](https://docs.skip.build/go/general/getting-started).
 - Builds a ready-to-use command for the `osmosisd` client.
 - Executes the swap automatically or saves the command to a file.
 - Sends a notification to Telegram about the transaction result.
